@@ -3,9 +3,10 @@ import { conectarDB } from '../config/data-source';
 import { Measure } from './entity/Measure';
 import { RequestUploadModel } from './models/requestUploadModel';
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from "@google/generative-ai";
-import exp from 'constants';
 import { ResponseUploadModel } from './models/responseUploadModel';
-import { response } from 'express';
+import { RequestConfirmModel } from './models/requestConfirmModel';
+import { ResponseConfirmModel } from './models/responseConfirmModel';
+
 
 const dataSource = await conectarDB();
 const customerRepository = dataSource.getRepository(Customer)
@@ -28,7 +29,7 @@ export async function uploadImage(req, res) {
     const data: RequestUploadModel = req.body;
     let responseData: ResponseUploadModel = {
         measure_uuid: '',
-        measure_value: '',
+        measure_value: 0,
         image_url: ''
     };
 
@@ -38,9 +39,11 @@ export async function uploadImage(req, res) {
         if (validation) {
             return res.status(400).send(validation)
         }
-        
+
         //consula o valor da medição
         let meter_value = await getImageMeasure(data.image);
+        var formatedMeterValue = meter_value.replace(/\D/g, "");
+        console.log(meter_value)
         responseData.measure_value = meter_value;
 
         //salva/retorna se customer já existir
@@ -52,18 +55,19 @@ export async function uploadImage(req, res) {
         //falta validação de leiura mensal
         const measure = new Measure();
         measure.measure_type = data.measure_type
+        measure.measure_value = formatedMeterValue;
         measure.measure_datetime = data.measure_datetime
         measure.image_url = data.image
         measure.customer = newCustomer;
 
         const newMeasure = await saveMeasure(measure);
         responseData = {
-            measure_value: meter_value,
+            measure_value: newMeasure.measure_value,
             image_url: newMeasure.image_url,
             measure_uuid: newMeasure.measure_uuid,
         }
 
-        return res.status(200).send({responseData})
+        return res.status(200).send({ responseData })
 
     } catch (error) {
         res.status(500).send(error)
@@ -71,7 +75,39 @@ export async function uploadImage(req, res) {
 
 }
 
-export async function saveOrReturnCustomer(customer: Customer) {
+export async function UpdateMeasureValue(req, res) {
+    const data: RequestConfirmModel = req.body;
+    let responseData: ResponseConfirmModel = {
+        success: false
+    };
+
+    try {
+        let validation = await validateConfirmRequest(data);
+        console.log(validation)
+        if (validation) {
+            return res.status(400).send(validation)
+        }
+
+        let measure: Measure = await getMeasure(data.measure_uuid);
+        if (!measure) {
+            return res.status(404).send({ error_code: "MEASURE_NOT_FOUND", error_description: "Leitura não encontrada" })
+        }else if(measure.has_confirmed){
+            return res.status(409).send({ error_code: "CONFIRMATION_DUPLICATE", error_description: "Leitura do mês já realizada" })
+        }
+
+        measure.has_confirmed = true;
+        measure.measure_value = data.confirmed_value;
+        await UpdateMeasure(measure);
+        responseData.success = true;
+
+        return res.status(200).send(responseData)
+
+    } catch (error) {
+        res.status(500).send(error)
+    }
+}
+
+async function saveOrReturnCustomer(customer: Customer) {
     let res = await customerRepository.findOne({ where: { customer_code: customer.customer_code } })
     if (!res) {
         const newCustomer = await customerRepository.save(customer);
@@ -81,21 +117,22 @@ export async function saveOrReturnCustomer(customer: Customer) {
     return res;
 }
 
-export async function saveMeasure(measure: Measure) {
+async function saveMeasure(measure: Measure) {
     const newMeasure = await measureRepository.save(measure);
     return newMeasure;
 }
 
-export async function UpdateMeasure(measure: Measure) {
-    let res = await measureRepository.findOne({ where: { measure_uuid: measure.measure_uuid } })
-    if (!res) {
-        return false
-    }
-    const updateMeasure = await measureRepository.update(measure.measure_uuid, { has_confirmed: measure.has_confirmed });
+async function UpdateMeasure(measure: Measure) {
+    const updateMeasure = await measureRepository.update(measure.measure_uuid, { has_confirmed: measure.has_confirmed, measure_value: measure.measure_value });
     return updateMeasure;
 }
 
-export async function getImageMeasure(image: string) {
+async function getMeasure(id: string) {
+    let res = await measureRepository.findOne({ where: { measure_uuid: id } })
+    return res
+}
+
+async function getImageMeasure(image: string) {
 
     try {
 
@@ -136,20 +173,28 @@ async function validateUploadRequest(data: RequestUploadModel) {
     }
 
     // Verificar se já existe uma leitura no mês naquele tipo de leitura
-/*     if(validateMonthMeasure(data.measure_datetime)){
-        return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
-    } */
+    /*     if(validateMonthMeasure(data.measure_datetime)){
+            return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
+        } */
 
     return false
 }
 
-async function validateMonthMeasure(date: Date){
+async function validateConfirmRequest(data: RequestConfirmModel) {
+    // Validar o tipo de dados dos parâmetros enviados
+    console.log((!data.confirmed_value || (typeof data.confirmed_value !== "number")), (!data.measure_uuid || (typeof data.measure_uuid !== "string")))
+    if ((!data.confirmed_value || (typeof data.confirmed_value !== "number")) || (!data.measure_uuid || (typeof data.measure_uuid !== "string"))) {
+        return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
+    }
+}
+
+async function validateMonthMeasure(date: Date) {
 
     //precisa arrumar
     let formatedDate = new Date(date)
     let month = formatedDate.getMonth() + 1;
     const allRegisters = await dataSource.manager.query(`SELECT * FROM measure WHERE date_trunc('MONTH', measure_datetime)::date =  ${month}`)
-    if(!allRegisters){
+    if (!allRegisters) {
         return false
     }
 

@@ -13,6 +13,9 @@ export class Measure {
     @Column({type: "varchar"})
     measure_type: string;
 
+    @Column({type: "int"})
+    measure_value: number;
+
     @Column({type: "boolean", default: false})
     has_confirmed: boolean;
 

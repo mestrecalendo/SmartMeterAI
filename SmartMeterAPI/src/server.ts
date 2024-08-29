@@ -3,14 +3,13 @@ import bodyParser from "body-parser";
 import swaggerUi from "swagger-ui-express";
 import cors from "cors";
 import swaggerFile from '../src/config/swagger.json';
-import { getImageMeasure } from './api/controller';
 import { router } from "./api/routes";
 
 const PORTA = 3000;
 const app: Application = express();
 
 app.use(bodyParser.json());
-
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
 //rotas
 app.use(router);

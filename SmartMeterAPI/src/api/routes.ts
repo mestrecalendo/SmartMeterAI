@@ -6,6 +6,5 @@ import * as controller from './controller';
 export const router = Router();
 
 router.post('/upload', controller.uploadImage)
-
-router.patch('/confirm', async (req, res)=>{})
+router.patch('/confirm', controller.UpdateMeasureValue)
 router.get('/:costumer_code/list', async (req, res)=>{})
