@@ -24,7 +24,6 @@ const model = genAI.getGenerativeModel({
     safetySettings
 });
 
-
 export async function uploadImage(req, res) {
     const data: RequestUploadModel = req.body;
     let responseData: ResponseUploadModel = {
@@ -73,14 +72,12 @@ export async function uploadImage(req, res) {
 }
 
 export async function saveOrReturnCustomer(customer: Customer) {
-    console.log("saveC")
     let res = await customerRepository.findOne({ where: { customer_code: customer.customer_code } })
     if (!res) {
         const newCustomer = await customerRepository.save(customer);
         return newCustomer;
     }
 
-    console.log(res, "saveC")
     return res;
 }
 
@@ -90,11 +87,12 @@ export async function saveMeasure(measure: Measure) {
 }
 
 export async function UpdateMeasure(measure: Measure) {
-    if (measureRepository.hasId(measure)) {
-        const updateMeasure = await measureRepository.update(measure.measure_uuid, { has_confirmed: measure.has_confirmed });
-        return updateMeasure;
+    let res = await measureRepository.findOne({ where: { measure_uuid: measure.measure_uuid } })
+    if (!res) {
+        return false
     }
-
+    const updateMeasure = await measureRepository.update(measure.measure_uuid, { has_confirmed: measure.has_confirmed });
+    return updateMeasure;
 }
 
 export async function getImageMeasure(image: string) {
@@ -119,7 +117,7 @@ export async function getImageMeasure(image: string) {
     }
 }
 
-export async function validateUploadRequest(data: RequestUploadModel) {
+async function validateUploadRequest(data: RequestUploadModel) {
 
     const base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
     const format_image = data.image.split(",");
@@ -138,5 +136,22 @@ export async function validateUploadRequest(data: RequestUploadModel) {
     }
 
     // Verificar se já existe uma leitura no mês naquele tipo de leitura
+/*     if(validateMonthMeasure(data.measure_datetime)){
+        return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
+    } */
+
     return false
+}
+
+async function validateMonthMeasure(date: Date){
+
+    //precisa arrumar
+    let formatedDate = new Date(date)
+    let month = formatedDate.getMonth() + 1;
+    const allRegisters = await dataSource.manager.query(`SELECT * FROM measure WHERE date_trunc('MONTH', measure_datetime)::date =  ${month}`)
+    if(!allRegisters){
+        return false
+    }
+
+    return true
 }
