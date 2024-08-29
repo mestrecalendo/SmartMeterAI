@@ -1,8 +1,10 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
+import dotenv from 'dotenv'
 import { Measure } from "../api/entity/Measure";
 import { Customer } from "../api/entity/Customer";
-require("dotenv").config();
+
+dotenv.config()
 
 const AppDataSource = new DataSource({
   type: "postgres",
@@ -18,12 +20,12 @@ const AppDataSource = new DataSource({
   subscribers: [],
 });
 
-export const conectarDB = () => {
-  AppDataSource.initialize()
-    .then(() => {
-      console.log("Data Source has been initialized!");
-    })
-    .catch((err) => {
-      console.error("Error during Data Source initialization", err);
-    });
+export const conectarDB = async () => {
+  try {
+    await AppDataSource.initialize()
+    console.log("Data Source has been initialized!");
+    return AppDataSource;
+  } catch (err) {
+    console.error("Error during Data Source initialization", err);
+  }
 };

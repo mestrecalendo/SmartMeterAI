@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm"
+import { Entity, Column, ManyToOne, PrimaryGeneratedColumn } from "typeorm"
+import { Customer } from "./Customer";
 
 @Entity()
 export class Measure {
@@ -6,15 +7,18 @@ export class Measure {
     @PrimaryGeneratedColumn('uuid')
     measure_uuid: string;
 
-    @Column()
+    @Column({type: "timestamp"})
     measure_datetime: Date;
 
-    @Column()
+    @Column({type: "varchar"})
     measure_type: string;
 
-    @Column()
-    has_confirmed:boolean;
+    @Column({type: "boolean", default: false})
+    has_confirmed: boolean;
 
-    @Column()
+    @Column({ type: "text" })
     image_url: string;
+
+    @ManyToOne(() => Customer, (customer) => customer.measures)
+    customer: Customer
 }
