@@ -29,7 +29,7 @@
    "scripts": {
       "start": "tsx src/server.ts",
       "dev": "nodemon --exec tsx src/server.ts",
-      "swagger": "node src/config/swagger.ts",
+      "swagger": "tsx src/config/swagger.ts",
       "typeorm": "typeorm-ts-node-commonjs"
    }
 }
