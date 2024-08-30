@@ -7,6 +7,7 @@ import { ResponseUploadModel } from './models/responseUploadModel';
 import { RequestConfirmModel } from './models/requestConfirmModel';
 import { ResponseConfirmModel } from './models/responseConfirmModel';
 import { ResponseListMeasureModel } from './models/responseListMeasureModel';
+import { Like } from 'typeorm';
 
 
 const dataSource = await conectarDB();
@@ -119,14 +120,14 @@ export async function listCustomerMeasures(req, res) {
         return res.status(400).send(validation)
     }
 
-    let measureList = await getAllMeasures(id)
+    let measureList = await getAllMeasures(id, measure_type)
 
     let list: ResponseListMeasureModel = {
-        customer_code: 'w',
+        customer_code: id,
         measures: measureList,
     }
 
-    if(!measureList){
+    if(measureList.length <= 0){
         return res.status(404).send({ error_code: "MEASURES_NOT_FOUND", error_description: "Nenhuma leitura encontrada"})
     }
 
@@ -180,13 +181,16 @@ async function getImageMeasure(image: string) {
     }
 }
 
-async function getAllMeasures(customer_code: string) {
+async function getAllMeasures(customer_code: string, measure_type: string) {
+
+    if(measure_type){
+        return dataSource.manager.query(`SELECT * FROM Customer INNER JOIN  Measure  ON '${customer_code}' = Customer.customer_code WHERE Measure.measure_type = '${measure_type}'`)
+    }
+
     return measureRepository.find({
         relations: { customer: false },
-        where: {customer: { customer_code: customer_code } }
-        
+        where: [{customer: { customer_code: customer_code } }]
     })
-
 }
 
 async function validateUploadRequest(data: RequestUploadModel) {
@@ -243,6 +247,7 @@ async function validateMonthMeasure(date: Date) {
     let formatedDate = new Date(date)
     let month = formatedDate.getMonth() + 1;
     const allRegisters = await dataSource.manager.query(`SELECT * FROM measure WHERE date_trunc('MONTH', measure_datetime)::date =  ${month}`)
+    console.log(allRegisters)
     if (!allRegisters) {
         return false
     }

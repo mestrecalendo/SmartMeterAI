@@ -1,7 +1,4 @@
 import { Router } from 'express';
-import { Customer } from './entity/Customer';
-import {RequestUploadModel} from './models/requestUploadModel'
-import { Measure } from './entity/Measure';
 import * as controller from './controller';
 export const router = Router();
 
