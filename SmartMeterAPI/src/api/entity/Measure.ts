@@ -13,7 +13,7 @@ export class Measure {
     @Column({type: "varchar"})
     measure_type: string;
 
-    @Column({type: "int"})
+    @Column({type: "int", default: 0})
     measure_value: number;
 
     @Column({type: "boolean", default: false})

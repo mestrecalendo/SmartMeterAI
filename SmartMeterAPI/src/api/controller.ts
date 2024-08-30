@@ -6,6 +6,7 @@ import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from "@google/ge
 import { ResponseUploadModel } from './models/responseUploadModel';
 import { RequestConfirmModel } from './models/requestConfirmModel';
 import { ResponseConfirmModel } from './models/responseConfirmModel';
+import { ResponseListMeasureModel } from './models/responseListMeasureModel';
 
 
 const dataSource = await conectarDB();
@@ -44,7 +45,7 @@ export async function uploadImage(req, res) {
         let meter_value = await getImageMeasure(data.image);
         var formatedMeterValue = meter_value.replace(/\D/g, "");
         console.log(meter_value)
-        responseData.measure_value = meter_value;
+        responseData.measure_value = formatedMeterValue;
 
         //salva/retorna se customer já existir
         const customer = new Customer();
@@ -67,7 +68,7 @@ export async function uploadImage(req, res) {
             measure_uuid: newMeasure.measure_uuid,
         }
 
-        return res.status(200).send({ responseData })
+        res.status(200).send({ responseData })
 
     } catch (error) {
         res.status(500).send(error)
@@ -91,7 +92,7 @@ export async function UpdateMeasureValue(req, res) {
         let measure: Measure = await getMeasure(data.measure_uuid);
         if (!measure) {
             return res.status(404).send({ error_code: "MEASURE_NOT_FOUND", error_description: "Leitura não encontrada" })
-        }else if(measure.has_confirmed){
+        } else if (measure.has_confirmed) {
             return res.status(409).send({ error_code: "CONFIRMATION_DUPLICATE", error_description: "Leitura do mês já realizada" })
         }
 
@@ -105,6 +106,31 @@ export async function UpdateMeasureValue(req, res) {
     } catch (error) {
         res.status(500).send(error)
     }
+}
+
+export async function listCustomerMeasures(req, res) {
+    let id = req.params.customer_code;
+    let { measure_type } = req.query
+
+    console.log(parseInt(id), measure_type)
+    let validation = await validateListMeasureRequest(id, measure_type)
+
+    if (validation) {
+        return res.status(400).send(validation)
+    }
+
+    let measureList = await getAllMeasures(id)
+
+    let list: ResponseListMeasureModel = {
+        customer_code: 'w',
+        measures: measureList,
+    }
+
+    if(!measureList){
+        return res.status(404).send({ error_code: "MEASURES_NOT_FOUND", error_description: "Nenhuma leitura encontrada"})
+    }
+
+    res.status(200).send(list)
 }
 
 async function saveOrReturnCustomer(customer: Customer) {
@@ -154,6 +180,15 @@ async function getImageMeasure(image: string) {
     }
 }
 
+async function getAllMeasures(customer_code: string) {
+    return measureRepository.find({
+        relations: { customer: false },
+        where: {customer: { customer_code: customer_code } }
+        
+    })
+
+}
+
 async function validateUploadRequest(data: RequestUploadModel) {
 
     const base64regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
@@ -161,7 +196,8 @@ async function validateUploadRequest(data: RequestUploadModel) {
 
     // Validar o tipo de dados dos parâmetros enviados
     if (!data.image || !data.customer_code ||
-        !data.measure_type || !data.measure_datetime) {
+        !data.measure_type || !data.measure_datetime ||
+        !(data.measure_type === "GAS" || data.measure_type === 'WATER')) {
         console.log('alguma variavel vazio')
         return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
     }
@@ -186,6 +222,19 @@ async function validateConfirmRequest(data: RequestConfirmModel) {
     if ((!data.confirmed_value || (typeof data.confirmed_value !== "number")) || (!data.measure_uuid || (typeof data.measure_uuid !== "string"))) {
         return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
     }
+}
+
+async function validateListMeasureRequest(customer_code, measure_type) {
+    if (measure_type) {
+        if (!(measure_type === "GAS" || measure_type === 'WATER')) {
+            return { error_code: "INVALID_TYPE", error_description: "Tipo de medição não permitida" }
+        }
+    }
+    else if (!customer_code || (typeof customer_code !== "string")) {
+        return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos são inválidos' }
+    }
+
+    return
 }
 
 async function validateMonthMeasure(date: Date) {
