@@ -15,6 +15,8 @@ const customerRepository = dataSource.getRepository(Customer)
 const measureRepository = dataSource.getRepository(Measure)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const aceptedFormats = ["image/png","image/jpeg","image/webp", "image/heic","image/heif"];
+
 const safetySettings = [
     {
         category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
@@ -68,7 +70,7 @@ export async function uploadImage(req, res) {
             image_url: newMeasure.image_url,
             measure_uuid: newMeasure.measure_uuid,
         }
-
+ 
         res.status(200).send({ responseData })
 
     } catch (error) {
@@ -155,19 +157,26 @@ async function UpdateMeasure(measure: Measure) {
 }
 
 async function getMeasure(id: string) {
-    let res = await measureRepository.findOne({ where: { measure_uuid: id } })
-    return res
+    try {
+        let res = await measureRepository.findOne({ where: { measure_uuid: id } })
+        return res
+    } catch (error) {
+        return
+    }
+
 }
 
 async function getImageMeasure(image: string) {
 
     try {
-
         const format_image = image.split(",");
+        
+        let image_format = aceptedFormats.filter((format) => format_image[0].includes(format))
+
         let image_data = {
             inlineData: {
                 data: format_image[1],
-                mimeType: "image/jpeg",
+                mimeType: image_format[0]
             }
         }
 
@@ -202,20 +211,26 @@ async function validateUploadRequest(data: RequestUploadModel) {
     if (!data.image || !data.customer_code ||
         !data.measure_type || !data.measure_datetime ||
         !(data.measure_type === "GAS" || data.measure_type === 'WATER')) {
-        console.log('alguma variavel vazio')
         return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
     }
 
     // (inclusive o base64)
     if (!base64regex.test(format_image[1])) {
-        console.log('base64regex.test(data.image)', base64regex.test(data.image))
         return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
     }
 
     // Verificar se já existe uma leitura no mês naquele tipo de leitura
-    /*     if(validateMonthMeasure(data.measure_datetime)){
-            return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
-        } */
+    let res = await filterMeasureByMonth(data.measure_datetime, data.measure_type)
+    console.log(res.length, res.length > 0)
+    if(res.length > 0){
+        return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
+    }
+
+    //valida tipo de imagem aceita pelo gemini
+    let image_format = aceptedFormats.filter((format) => format_image[0].includes(format))
+    if(image_format.length <= 0){
+        return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
+    }
 
     return false
 }
@@ -241,16 +256,8 @@ async function validateListMeasureRequest(customer_code, measure_type) {
     return
 }
 
-async function validateMonthMeasure(date: Date) {
-
-    //precisa arrumar
+async function filterMeasureByMonth(date: Date, measure_type:string) {
     let formatedDate = new Date(date)
     let month = formatedDate.getMonth() + 1;
-    const allRegisters = await dataSource.manager.query(`SELECT * FROM measure WHERE date_trunc('MONTH', measure_datetime)::date =  ${month}`)
-    console.log(allRegisters)
-    if (!allRegisters) {
-        return false
-    }
-
-    return true
+    return await dataSource.manager.query(`SELECT * FROM measure WHERE EXTRACT('MONTH' FROM measure_datetime) = ${month} AND measure_type = '${measure_type}'`)
 }
