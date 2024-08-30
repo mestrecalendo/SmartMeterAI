@@ -39,7 +39,6 @@ export async function uploadImage(req, res) {
 
     try {
         let validation = await validateUploadRequest(data);
-        console.log(validation)
         if (validation) {
             return res.status(400).send(validation)
         }
@@ -47,7 +46,6 @@ export async function uploadImage(req, res) {
         //consula o valor da medição
         let meter_value = await getImageMeasure(data.image);
         var formatedMeterValue = meter_value.replace(/\D/g, "");
-        console.log(meter_value)
         responseData.measure_value = formatedMeterValue;
 
         //salva/retorna se customer já existir
@@ -87,7 +85,6 @@ export async function UpdateMeasureValue(req, res) {
 
     try {
         let validation = await validateConfirmRequest(data);
-        console.log(validation)
         if (validation) {
             return res.status(400).send(validation)
         }
@@ -115,7 +112,6 @@ export async function listCustomerMeasures(req, res) {
     let id = req.params.customer_code;
     let { measure_type } = req.query
 
-    console.log(parseInt(id), measure_type)
     let validation = await validateListMeasureRequest(id, measure_type)
 
     if (validation) {
@@ -182,7 +178,6 @@ async function getImageMeasure(image: string) {
 
         const prompt = "pesquise mais sobre medidor de gas e retorne apenas o valor que indica a medida de uso";
         const result = await model.generateContent([image_data, prompt]);
-        console.log(result.response.text());
         return result.response.text();
 
     } catch (error) {
@@ -221,7 +216,6 @@ async function validateUploadRequest(data: RequestUploadModel) {
 
     // Verificar se já existe uma leitura no mês naquele tipo de leitura
     let res = await filterMeasureByMonth(data.measure_datetime, data.measure_type)
-    console.log(res.length, res.length > 0)
     if(res.length > 0){
         return { error_code: "DOUBLE_REPORT", error_description: "Leitura do mês já realizada" }
     }
@@ -237,7 +231,6 @@ async function validateUploadRequest(data: RequestUploadModel) {
 
 async function validateConfirmRequest(data: RequestConfirmModel) {
     // Validar o tipo de dados dos parâmetros enviados
-    console.log((!data.confirmed_value || (typeof data.confirmed_value !== "number")), (!data.measure_uuid || (typeof data.measure_uuid !== "string")))
     if ((!data.confirmed_value || (typeof data.confirmed_value !== "number")) || (!data.measure_uuid || (typeof data.measure_uuid !== "string"))) {
         return { error_code: "INVALID_DATA", error_description: 'Os dados fornecidos no corpo da requisição são inválidos' }
     }
